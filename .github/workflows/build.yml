@@ -51,13 +51,16 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v5
-
       - name: Restore pacman package cache
         uses: actions/cache@v5
         with:
           path: /var/cache/pacman/pkg
           key: pacman-pkg
+
+      - name: Bootstrap git for checkout
+        run: pacman -Syy --noconfirm git
+
+      - uses: actions/checkout@v5
 
       - name: Restore cargo download cache
         uses: actions/cache@v5
@@ -69,7 +72,7 @@ jobs:
 
       - name: Install tools
         run: |
-          pacman -Syyu --noconfirm git base-devel jq curl github-cli
+          pacman -Syyu --noconfirm base-devel jq curl github-cli
           curl -fsSL https://github.com/mikefarah/yq/releases/download/v4.44.6/yq_linux_amd64 -o /usr/bin/yq
           chmod +x /usr/bin/yq
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
@@ -133,9 +136,11 @@ jobs:
         run: |
           set -euo pipefail
           gh release upload "${{ steps.build.outputs.tag }}" \
-            "${GITHUB_WORKSPACE}/artifacts/${{ steps.build.outputs.tarball_name }}" --clobber 2>/dev/null \
+            "${GITHUB_WORKSPACE}/artifacts/${{ steps.build.outputs.tarball_name }}" \
+            --repo "${{ github.repository }}" --clobber 2>/dev/null \
             || gh release create "${{ steps.build.outputs.tag }}" \
-              "${GITHUB_WORKSPACE}/artifacts/${{ steps.build.outputs.tarball_name }}"
+              "${GITHUB_WORKSPACE}/artifacts/${{ steps.build.outputs.tarball_name }}" \
+              --repo "${{ github.repository }}"
 
       - name: Bump PKGBUILD
         if: success()
