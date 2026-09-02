@@ -1,0 +1,35 @@
+name: Sync package options
+
+# Keeps the Build Package dropdown in sync with packages/*/ — no manual workflow edits.
+on:
+  push:
+    branches: [master]
+    paths: [packages/**]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update workflow dropdown
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/mikefarah/yq/releases/download/v4.44.6/yq_linux_amd64 -o /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+
+          options="$(find packages -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort \
+            | jq -R -s -c '["all"] + (split("\n") | map(select(length > 0)))')"
+          yq -i ".on.workflow_dispatch.inputs.package.options = ${options}" .github/workflows/build.yml
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/build.yml
+          git diff --cached --quiet || git commit -m "chore: sync package dropdown options [skip ci]"
+          git push

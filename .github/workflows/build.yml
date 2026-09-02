@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: Package name, or "all" to build every package under packages/
-        type: string
-        default: all
+        type: choice
+        # Auto-synced from packages/*/ by sync-package-options.yml
+        options: [all, wallust]
 
 permissions:
   contents: write
@@ -29,9 +29,13 @@ jobs:
             json="$(printf '%s\n' "${pkgs[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
           else
             [[ -f "packages/${input}/build.yaml" ]] || { echo "::error::Unknown package: ${input}"; exit 1; }
-            json="$(jq -n --arg p "$input" '[$p]')"
+            json="$(jq -n -c --arg p "$input" '[$p]')"
           fi
-          echo "packages=${json}" >>"$GITHUB_OUTPUT"
+          {
+            echo "packages<<EOF"
+            echo "$json"
+            echo "EOF"
+          } >>"$GITHUB_OUTPUT"
 
   build:
     needs: discover
