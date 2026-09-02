@@ -17,7 +17,7 @@ jobs:
     outputs:
       packages: ${{ steps.set.outputs.packages }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - id: set
         run: |
@@ -51,16 +51,16 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Restore pacman package cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/pacman/pkg
           key: pacman-pkg
 
       - name: Restore cargo download cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /root/.cargo/registry
