@@ -4,15 +4,42 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        type: choice
-        options: [wallust]
+        description: Package name, or "all" to build every package under packages/
+        type: string
+        default: all
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  discover:
     runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.set.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: set
+        run: |
+          set -euo pipefail
+          input="${{ inputs.package }}"
+          if [[ "$input" == "all" ]]; then
+            mapfile -t pkgs < <(find packages -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+            ((${#pkgs[@]})) || { echo "::error::No packages found under packages/"; exit 1; }
+            json="$(printf '%s\n' "${pkgs[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+          else
+            [[ -f "packages/${input}/build.yaml" ]] || { echo "::error::Unknown package: ${input}"; exit 1; }
+            json="$(jq -n --arg p "$input" '[$p]')"
+          fi
+          echo "packages=${json}" >>"$GITHUB_OUTPUT"
+
+  build:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.discover.outputs.packages) }}
     container:
       image: archlinux:latest
       options: --privileged
@@ -36,13 +63,13 @@ jobs:
           SOURCE_TOKEN: ${{ secrets.SOURCE_TOKEN }}
         run: |
           set -euo pipefail
-          package="${{ inputs.package }}"
+          package="${{ matrix.package }}"
           cfg="${GITHUB_WORKSPACE}/packages/${package}/build.yaml"
 
           ref="$(yq -r '.source.ref // ""' "$cfg")"
           if [[ -z "$ref" || "$ref" == latest ]]; then
             ref="$(curl -fsSL "$(yq -r '.source.releases' "$cfg")" | jq -r '
-              [.[] | select((.draft // false) | not) | select((.prerelease // false) | not)][0].tag_name
+              [.[] | select((.draft // false) | not)][0].tag_name
             ')"
           fi
           [[ -n "$ref" && "$ref" != null ]]
