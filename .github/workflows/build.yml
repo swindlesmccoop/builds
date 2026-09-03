@@ -56,19 +56,22 @@ jobs:
         with:
           path: /var/cache/pacman/pkg
           key: pacman-pkg
+          save-always: true
 
       - name: Bootstrap git for checkout
         run: pacman -Syy --noconfirm git
 
       - uses: actions/checkout@v5
 
-      - name: Restore cargo download cache
+      - name: Restore cargo cache
         uses: actions/cache@v5
         with:
           path: |
             /root/.cargo/registry
             /root/.cargo/git
-          key: cargo-registry
+            /root/cargo-target/${{ matrix.package }}
+          key: cargo-${{ matrix.package }}
+          save-always: true
 
       - name: Install tools
         run: |
@@ -111,6 +114,8 @@ jobs:
           mapfile -t deps < <(yq -r '.makedepends[]' "$cfg" | grep -v '^null$')
           ((${#deps[@]})) && pacman -Syyu --noconfirm --needed "${deps[@]}"
 
+          export CARGO_TARGET_DIR="/root/cargo-target/${package}"
+          mkdir -p "$CARGO_TARGET_DIR"
           export STAGING="$staging"
           (cd "$src" && bash -euo pipefail -c "$build")
           (cd "$src" && bash -euo pipefail -c "$stage")
