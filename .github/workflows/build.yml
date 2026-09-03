@@ -52,11 +52,11 @@ jobs:
         shell: bash
     steps:
       - name: Restore pacman package cache
-        uses: actions/cache@v5
+        id: cache-pacman
+        uses: actions/cache/restore@v5
         with:
           path: /var/cache/pacman/pkg
           key: pacman-pkg
-          save-always: true
 
       - name: Bootstrap git for checkout
         run: pacman -Syy --noconfirm git
@@ -64,14 +64,14 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Restore cargo cache
-        uses: actions/cache@v5
+        id: cache-cargo
+        uses: actions/cache/restore@v5
         with:
           path: |
             /root/.cargo/registry
             /root/.cargo/git
             /root/cargo-target/${{ matrix.package }}
           key: cargo-${{ matrix.package }}
-          save-always: true
 
       - name: Install tools
         run: |
@@ -174,3 +174,22 @@ jobs:
           git add "${dir}/PKGBUILD"
           git diff --cached --quiet || git commit -m "chore(${dir}): ${{ steps.build.outputs.pkgver }} [skip ci]"
           git push
+
+      # Save after all work so caches persist even when build/publish fails.
+      # Unlike save-always, this also updates caches on cache-hit runs (new .pkg / cargo artifacts).
+      - name: Save pacman package cache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: /var/cache/pacman/pkg
+          key: ${{ steps.cache-pacman.outputs.cache-primary-key }}
+
+      - name: Save cargo cache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            /root/.cargo/registry
+            /root/.cargo/git
+            /root/cargo-target/${{ matrix.package }}
+          key: ${{ steps.cache-cargo.outputs.cache-primary-key }}
