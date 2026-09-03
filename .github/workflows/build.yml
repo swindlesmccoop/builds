@@ -193,7 +193,8 @@ jobs:
           fi
 
           # Regenerate from PKGBUILD so .SRCINFO stays in sync (pkgver, pkgrel, sha256sums, etc.)
-          (cd "$pkgdir" && makepkg --printsrcinfo > .SRCINFO)
+          # CI container runs as root; --printsrcinfo only reads PKGBUILD metadata.
+          (cd "$pkgdir" && MAKEPKG_ALLOW_ROOT=1 makepkg --printsrcinfo > .SRCINFO)
 
           cd "${GITHUB_WORKSPACE}/pkgbuilds"
           git config user.name "github-actions[bot]"
