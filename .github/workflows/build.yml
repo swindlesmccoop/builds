@@ -163,16 +163,44 @@ jobs:
           git clone "https://x-access-token:${PKGBUILDS_TOKEN}@github.com/swindlesmccoop/PKGBUILDs.git" \
             "${GITHUB_WORKSPACE}/pkgbuilds"
           dir="${{ steps.build.outputs.pkgbuild }}"
-          sed -i \
-            -e "s/^pkgver=.*/pkgver=${{ steps.build.outputs.pkgver }}/" \
-            -e "s/^pkgrel=.*/pkgrel=1/" \
-            -e "s/^sha256sums=.*/sha256sums=('${{ steps.build.outputs.sha256 }}')/" \
-            "${GITHUB_WORKSPACE}/pkgbuilds/${dir}/PKGBUILD"
+          pkgdir="${GITHUB_WORKSPACE}/pkgbuilds/${dir}"
+          pkgbuild="${pkgdir}/PKGBUILD"
+          new_pkgver="${{ steps.build.outputs.pkgver }}"
+          new_sha256="${{ steps.build.outputs.sha256 }}"
+
+          old_pkgver="$(sed -n 's/^pkgver=//p' "$pkgbuild" | head -1)"
+          old_pkgrel="$(sed -n 's/^pkgrel=//p' "$pkgbuild" | head -1)"
+          old_sha256="$(sed -n "s/^sha256sums=('\\([^']*\\)').*/\\1/p" "$pkgbuild" | head -1)"
+
+          if [[ "$old_pkgver" == "$new_pkgver" && "$old_sha256" == "$new_sha256" ]]; then
+            echo "PKGBUILD already matches ${new_pkgver}; skipping version bump"
+          else
+            if [[ "$old_pkgver" == "$new_pkgver" ]]; then
+              new_pkgrel=$((old_pkgrel + 1))
+            else
+              new_pkgrel=1
+            fi
+            sed -i \
+              -e "s/^pkgver=.*/pkgver=${new_pkgver}/" \
+              -e "s/^pkgrel=.*/pkgrel=${new_pkgrel}/" \
+              -e "s/^sha256sums=.*/sha256sums=('${new_sha256}')/" \
+              "$pkgbuild"
+          fi
+
+          # Regenerate from PKGBUILD so .SRCINFO stays in sync (pkgver, pkgrel, sha256sums, etc.)
+          (cd "$pkgdir" && makepkg --printsrcinfo > .SRCINFO)
+
           cd "${GITHUB_WORKSPACE}/pkgbuilds"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "${dir}/PKGBUILD"
-          git diff --cached --quiet || git commit -m "chore(${dir}): ${{ steps.build.outputs.pkgver }} [skip ci]"
+          git add "${dir}/PKGBUILD" "${dir}/.SRCINFO"
+          if git diff --cached --quiet; then
+            echo "PKGBUILD and .SRCINFO already up to date"
+            exit 0
+          fi
+          pkgver="$(sed -n 's/^pkgver=//p' "$pkgbuild" | head -1)"
+          pkgrel="$(sed -n 's/^pkgrel=//p' "$pkgbuild" | head -1)"
+          git commit -m "chore(${dir}): ${pkgver}-${pkgrel} [skip ci]"
           git push
 
       # Save after all work so caches persist even when build/publish fails.
