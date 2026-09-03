@@ -167,6 +167,11 @@ jobs:
           pkgbuild="${pkgdir}/PKGBUILD"
           new_pkgver="${{ steps.build.outputs.pkgver }}"
           new_sha256="${{ steps.build.outputs.sha256 }}"
+          name="$(yq -r '.name' "${GITHUB_WORKSPACE}/packages/${{ matrix.package }}/build.yaml")"
+          arch="$(yq -r '.arch' "${GITHUB_WORKSPACE}/packages/${{ matrix.package }}/build.yaml")"
+          source_url="https://github.com/${{ github.repository }}/releases/download/${name}-v\${pkgver}/${name}-\${pkgver}-${arch}.tar.gz"
+
+          sed -i "s|^source=.*|source=(\"${source_url}\")|" "$pkgbuild"
 
           old_pkgver="$(sed -n 's/^pkgver=//p' "$pkgbuild" | head -1)"
           old_pkgrel="$(sed -n 's/^pkgrel=//p' "$pkgbuild" | head -1)"
